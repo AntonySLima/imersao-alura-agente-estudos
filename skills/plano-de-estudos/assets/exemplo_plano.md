@@ -68,7 +68,7 @@ Nada. O objetivo cabe no prazo. Se sobrar fôlego depois da entrevista, o próxi
 
 ### 4. Como importar no Google Agenda
 
-1. Baixe o arquivo `plano-de-estudos.csv` (seção 5) para o seu computador.
+1. Baixe o arquivo `plano-de-estudos.csv` do seu bucket no Google Cloud Storage (`gs://plano-estudos-bucket/plano-de-estudos.csv`).
 2. No Google Agenda (computador): **Configurações ⚙️ → Importar e exportar → Importar**.
 3. Selecione o arquivo, escolha a agenda de destino e clique em **Importar**.
 
@@ -76,14 +76,14 @@ Nada. O objetivo cabe no prazo. Se sobrar fôlego depois da entrevista, o próxi
 
 ### 5. Agenda (CSV)
 
-📁 Salvei a agenda em `plano-de-estudos.csv`, com 10 sessões.
+📁 Salvei a agenda no Google Cloud Storage: `gs://plano-estudos-bucket/plano-de-estudos.csv`, com 10 sessões.
 
 ---
 **Próximos passos:** posso ajustar o plano se sua rotina mudar, se você atrasar alguma sessão ou se quiser mais detalhes em algum módulo.
 
 ---
 
-**Conteúdo gravado com `WriteFile` em `plano-de-estudos.csv`** (não aparece na resposta):
+**Conteúdo gravado com `create_object` no bucket GCS em `plano-de-estudos.csv`** (não aparece na resposta):
 
 ```csv
 Subject,Start Date,Start Time,End Date,End Time,Description

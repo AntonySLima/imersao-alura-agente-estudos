@@ -1,6 +1,6 @@
-# Salvar a Agenda em Arquivo (EnvironmentToolset)
+# Salvar a Agenda no Google Cloud Storage (GCSToolset)
 
-O agente salva a agenda num arquivo CSV usando as ferramentas de arquivo do **EnvironmentToolset** do ADK ([adk.dev/integrations/environment-toolset](https://adk.dev/integrations/environment-toolset/)). As ferramentas trabalham dentro de uma pasta do ambiente (o `working_dir`), e a pessoa importa o arquivo gerado no Google Agenda.
+O agente salva a agenda num arquivo CSV diretamente em um bucket do **Google Cloud Storage (GCS)** usando as ferramentas do **GCSToolset** do ADK ([adk.dev/integrations/gcs](https://adk.dev/integrations/gcs/)). A pessoa pode baixar o arquivo do bucket para importar no Google Agenda.
 
 ---
 
@@ -8,16 +8,16 @@ O agente salva a agenda num arquivo CSV usando as ferramentas de arquivo do **En
 
 | Ferramenta | Para que serve | Argumentos |
 |---|---|---|
-| `WriteFile` | Cria o arquivo ou **sobrescreve** o arquivo inteiro | `path` (texto), `content` (texto) |
-| `ReadFile` | Lê um arquivo e devolve o conteúdo com o número de cada linha | `path` (texto), `start_line` e `end_line` (opcionais) |
+| `create_object` | Cria o objeto no bucket ou **sobrescreve** o objeto inteiro | `bucket_name` (texto), `object_name` (texto), `data` (texto) |
+| `get_object_data` | Lê o conteúdo do objeto no bucket | `bucket_name` (texto), `object_name` (texto) |
 
-Use **só** essas duas. Não tente executar comandos (`Execute`) nem editar trechos (`EditFile`): o CSV é sempre gravado inteiro, de uma vez.
+Use **só** essas duas ferramentas para interações com o GCS. O CSV é sempre gravado ou sobrescrito inteiro, de uma vez, através do parâmetro `data`.
 
-## Regras de caminho
+## Regras de bucket e objeto
 
-* Use sempre o caminho **relativo** `plano-de-estudos.csv`. Ele é resolvido dentro da pasta do ambiente.
-* **Não** use caminho absoluto (`/home/...`) nem `../`. O ambiente recusa esses caminhos com o erro `Path escapes working directory`.
-* Use sempre o mesmo nome de arquivo. No replanejamento, a versão nova substitui a anterior.
+* O nome do bucket padrão é informado na sua instrução inicial (ou fornecido pelo usuário).
+* Use sempre o nome de objeto fixo `plano-de-estudos.csv`.
+* No replanejamento, a versão nova substitui a anterior no mesmo bucket e com o mesmo nome de objeto.
 
 ## Como gravar a agenda
 
@@ -27,15 +27,16 @@ Use **só** essas duas. Não tente executar comandos (`Execute`) nem editar trec
    - [ ] Há uma linha por sessão, sem linhas em branco, e nenhuma sessão cai em dia que a pessoa não informou.
    - [ ] Datas em `MM/DD/YYYY` e horários em `HH:MM AM/PM`.
    - [ ] Toda `Description` está entre aspas duplas.
-   - [ ] O conteúdo **não** tem a cerca ```` ```csv ```` nem texto explicativo, só o CSV.
-3. Chame `WriteFile` com `path` igual a `plano-de-estudos.csv` e `content` igual ao CSV, terminando com uma quebra de linha.
+   - [ ] O conteúdo do parâmetro `data` **não** tem a cerca ```` ```csv ```` nem texto explicativo, só o CSV puro terminando com quebra de linha.
+3. Chame `create_object` com `bucket_name` igual ao bucket configurado, `object_name` igual a `plano-de-estudos.csv` e `data` contendo a string CSV.
 
 Exemplo de chamada:
 
 ```json
 {
-  "path": "plano-de-estudos.csv",
-  "content": "Subject,Start Date,Start Time,End Date,End Time,Description\n📚 Python: variáveis e entrada/saída,11/02/2026,08:00 PM,11/02/2026,09:00 PM,\"Revisão: — | Técnica: Aprender fazendo | Entregável: script de nome e idade\"\n"
+  "bucket_name": "plano-estudos-bucket",
+  "object_name": "plano-de-estudos.csv",
+  "data": "Subject,Start Date,Start Time,End Date,End Time,Description\n📚 Python: variáveis e entrada/saída,11/02/2026,08:00 PM,11/02/2026,09:00 PM,\"Revisão: — | Técnica: Aprender fazendo | Entregável: script de nome e idade\"\n"
 }
 ```
 
@@ -43,16 +44,15 @@ Exemplo de chamada:
 
 | Resposta da ferramenta | O que fazer |
 |---|---|
-| `{"status": "ok", "message": "Wrote plano-de-estudos.csv"}` | Sucesso. Informe na seção 5 do template o caminho e o número de sessões. |
-| `{"status": "error", "error": "Path escapes working directory: ..."}` | O caminho estava errado. Tente de novo **uma vez** com `plano-de-estudos.csv`. |
-| Qualquer outro erro | Não insista. Diga em uma frase que não foi possível salvar o arquivo e mostre o CSV num bloco ```` ```csv ```` na seção 5. |
+| `{"status": "SUCCESS", ...}` | Sucesso. Informe na seção 5 do template a URI `gs://<bucket_name>/plano-de-estudos.csv` e o número de sessões. |
+| `{"status": "ERROR", "error_details": "..."}` | Ocorreu um erro (por exemplo, bucket não existe ou erro de permissão). Não insista. Explique resumidamente o motivo na seção 5 e mostre o CSV completo num bloco ```` ```csv ```` como fallback para o usuário. |
 
-Nunca diga que salvou o arquivo sem ter recebido `"status": "ok"`.
+Nunca diga que salvou o arquivo no GCS sem ter recebido `"status": "SUCCESS"`.
 
 ## Replanejamento
 
-1. Se precisar lembrar do plano atual, chame `ReadFile` com `path` igual a `plano-de-estudos.csv`.
-2. A resposta vem com o número de cada linha na frente (ex.: `     1\tSubject,Start Date,...`). Esses números **não** fazem parte do arquivo: remova-os antes de reaproveitar qualquer linha.
-3. Se a resposta for `File not found`, monte o CSV a partir da tabela de sessões da conversa.
-4. Monte o CSV novo **inteiro**, já com os ajustes, e grave com `WriteFile` no mesmo caminho. A versão anterior é substituída.
-5. Na resposta, diga o que mudou e confirme que o arquivo foi atualizado.
+1. Se precisar lembrar do plano atual gravado no GCS, chame `get_object_data` com `bucket_name` e `object_name` igual a `plano-de-estudos.csv`.
+2. A resposta vem como `{"status": "SUCCESS", "data": "..."}` com o conteúdo em texto puro do CSV.
+3. Se a resposta for erro (ex.: objeto não encontrado), monte o CSV a partir da tabela de sessões da conversa.
+4. Monte o CSV novo **inteiro**, já com os ajustes, e grave chamando `create_object` no mesmo bucket e com o mesmo `object_name`. A versão anterior é substituída.
+5. Na resposta, diga o que mudou e confirme que o arquivo no bucket foi atualizado.
